@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Snake con Caritas - 80 y 90 Radio</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+            position: relative;
+        }
+        
+        #game-container {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #emoji-reactions {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            z-index: 60;
+            min-height: 60px;
+        }
+        .reaction-emoji {
+            font-size: 32px;
+            animation: popIn 0.3s ease-out, fadeOut 0.5s ease-in 2s forwards;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+        .reaction-text {
+            font-size: 14px;
+            color: #ffdd59;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            animation: slideUp 0.3s ease-out, fadeOut 0.5s ease-in 2s forwards;
+        }
+        @keyframes popIn {
+            0% { transform: scale(0); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes slideUp {
+            0% { transform: translateY(10px); opacity: 0; }
+            100% { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes fadeOut {
+            0% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+        
+        #score-board {
+            position: absolute;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 28px;
+            font-weight: bold;
+            background: rgba(0,0,0,0.5);
+            padding: 10px 30px;
+            border-radius: 15px;
+            z-index: 50;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+        
+        #game-board {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            background: linear-gradient(135deg, #2d3436 0%, #1a1a2e 100%);
+            border: 4px solid #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            overflow: hidden;
+        }
+        
+        .snake-segment {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%);
+            border-radius: 4px;
+            border: 2px solid rgba(255,255,255,0.3);
+            transition: all 0.05s linear;
+        }
+        .snake-head {
+            background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%);
+            border-radius: 6px;
+            z-index: 10;
+        }
+        
+        .food {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            animation: pulse 0.5s ease-in-out infinite;
+            line-height: 1;
+            text-align: center;
+        }
+        .food-common, .food-uncommon { font-size: 13px; }
+        .food-rare, .food-epic, .food-danger { font-size: 14px; }
+        .food-legendary, .food-ultra, .food-crazy { font-size: 15px; }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+        }
+        .food-common { 
+            background: linear-gradient(135deg, #ffdd59, #f9ca24);
+            box-shadow: 0 0 10px #ffdd59;
+        }
+        .food-uncommon { 
+            background: linear-gradient(135deg, #ffd93d, #f9ca24);
+            box-shadow: 0 0 12px #ffd93d;
+        }
+        .food-rare { 
+            background: linear-gradient(135deg, #ffdd59, #ff9f43);
+            box-shadow: 0 0 15px #ffdd59;
+        }
+        .food-epic { 
+            background: linear-gradient(135deg, #ffd93d, #ff6b6b);
+            box-shadow: 0 0 18px #ffd93d;
+            animation: pulse 0.3s ease-in-out infinite, glow 1s ease-in-out infinite;
+        }
+        .food-legendary { 
+            background: linear-gradient(135deg, #ffd93d, #feca57);
+            box-shadow: 0 0 20px #ffd93d, 0 0 30px #ff6b6b;
+            animation: pulse 0.2s ease-in-out infinite, glow 0.5s ease-in-out infinite;
+        }
+        .food-danger { 
+            background: linear-gradient(135deg, #a55eea, #8854d0);
+            box-shadow: 0 0 10px #a55eea;
+            animation: pulse 0.3s ease-in-out infinite, shake 0.5s ease-in-out infinite;
+        }
+        .food-ultra { 
+            background: linear-gradient(135deg, #ffd93d, #00d2d3);
+            box-shadow: 0 0 25px #ffd93d;
+            animation: pulse 0.2s ease-in-out infinite, rainbow 2s linear infinite;
+        }
+        .food-crazy {
+            background: linear-gradient(135deg, #ffd93d, #ff6b6b);
+            box-shadow: 0 0 22px #ffd93d;
+            animation: pulse 0.25s ease-in-out infinite, glow 0.7s ease-in-out infinite;
+        }
+        @keyframes glow {
+            0%, 100% { filter: brightness(1); }
+            50% { filter: brightness(1.3); }
+        }
+        @keyframes rainbow {
+            0% { filter: hue-rotate(0deg); }
+            100% { filter: hue-rotate(360deg); }
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-3px); }
+            75% { transform: translateX(3px); }
+        }
+        
+        .food-timer {
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 24px;
+            height: 4px;
+            background: rgba(255,255,255,0.3);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .food-timer-bar {
+            height: 100%;
+            background: #ff6b6b;
+            animation: timerDecrease 5s linear forwards;
+        }
+        @keyframes timerDecrease {
+            0% { width: 100%; }
+            100% { width: 0%; }
+        }
+        
+        .particle {
+            position: absolute;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 30;
+            animation: particleFly 0.6s ease-out forwards;
+        }
+        @keyframes particleFly {
+            0% { transform: translate(0, 0) scale(1); opacity: 1; }
+            100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+        }
+        
+        .floating-text {
+            position: absolute;
+            font-size: 16px;
+            font-weight: bold;
+            pointer-events: none;
+            z-index: 40;
+            animation: floatUp 0.8s ease-out forwards;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-40px) scale(1.2); opacity: 0; }
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: grid;
+            grid-template-columns: repeat(3, 60px);
+            grid-template-rows: repeat(2, 60px);
+            gap: 10px;
+            z-index: 50;
+        }
+        .control-btn {
+            width: 60px;
+            height: 60px;
+            background: rgba(255,255,255,0.1);
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 15px;
+            color: white;
+            font-size: 28px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .control-btn:active {
+            background: rgba(255,255,255,0.3);
+            transform: scale(0.95);
+        }
+        .control-btn.up { grid-column: 2; grid-row: 1; }
+        .control-btn.left { grid-column: 1; grid-row: 2; }
+        .control-btn.down { grid-column: 2; grid-row: 2; }
+        .control-btn.right { grid-column: 3; grid-row: 2; }
+        
+        #menu-screen, #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+        .menu-title {
+            font-size: 48px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-align: center;
+            text-shadow: 3px 3px 6px rgba(0,0,0,0.8);
+            background: linear-gradient(135deg, #ffdd59, #f9ca24);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .menu-subtitle {
+            font-size: 14px;
+            color: #ffdd59;
+            margin-bottom: 20px;
+            text-align: center;
+            padding: 0 20px;
+        }
+        .food-legend {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+            font-size: 11px;
+            max-width: 350px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0,0,0,0.3);
+            padding: 8px;
+            border-radius: 8px;
+        }
+        .legend-emoji {
+            font-size: 18px;
+            width: 24px;
+            text-align: center;
+        }
+        .menu-btn {
+            padding: 15px 50px;
+            font-size: 20px;
+            background: linear-gradient(135deg, #ffdd59, #f9ca24);
+            border: none;
+            border-radius: 30px;
+            color: #333;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            transition: transform 0.2s;
+        }
+        .menu-btn:hover { transform: scale(1.05); }
+        .menu-btn.secondary {
+            background: rgba(255,255,255,0.2);
+            border: 2px solid white;
+            color: white;
+        }
+        .hidden { display: none !important; }
+        
+        .radio-container {
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 150;
+            gap: 8px;
+        }
+        #radio-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 2px solid white;
+            background: rgba(0,0,0,0.3);
+            cursor: pointer;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        #radio-btn:hover {
+            background: rgba(0,0,0,0.5);
+            transform: scale(1.1);
+            border-color: #ffdd59;
+        }
+        .radio-img {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+            display: block;
+        }
+        .radio-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+        }
+        #radio-btn.loading .radio-overlay {
+            opacity: 1;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #radio-btn.playing {
+            border-color: #ff6b6b;
+            animation: pulse-radio 2s infinite;
+        }
+        @keyframes pulse-radio {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.4); }
+            50% { box-shadow: 0 0 0 12px rgba(255, 107, 107, 0); }
+        }
+        .radio-label {
+            font-size: 11px;
+            color: white;
+            text-align: center;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+            white-space: nowrap;
+            font-weight: 500;
+            max-width: 100px;
+        }
+        
+        #sound-btn {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 2px solid white;
+            background: rgba(0,0,0,0.3);
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 150;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #results-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+        .results-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            max-width: 85%;
+            border: 3px solid rgba(255,255,255,0.3);
+        }
+        .results-score {
+            font-size: 48px;
+            font-weight: bold;
+            margin: 20px 0;
+            color: #ffdd59;
+            text-shadow: 3px 3px 6px rgba(0,0,0,0.8);
+        }
+        .results-stats {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin: 20px 0;
+            font-size: 14px;
+        }
+        .stat-item {
+            background: rgba(0,0,0,0.5);
+            padding: 8px 15px;
+            border-radius: 10px;
+        }
+        
+        #leaderboard-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .leaderboard-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 30px;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 400px;
+            max-height: 70vh;
+            overflow-y: auto;
+            border: 3px solid rgba(255,255,255,0.3);
+        }
+        .leaderboard-title {
+            font-size: 28px;
+            text-align: center;
+            margin-bottom: 20px;
+            color: #ffdd59;
+        }
+        .leaderboard-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px;
+            margin: 8px 0;
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            color: white;
+        }
+        .leaderboard-item.top-1 { background: linear-gradient(135deg, #ffd700, #ffaa00); }
+        .leaderboard-item.top-2 { background: linear-gradient(135deg, #c0c0c0, #a0a0a0); }
+        .leaderboard-item.top-3 { background: linear-gradient(135deg, #cd7f32, #b87333); }
+        
+        @media (max-width: 350px) {
+            #game-board { width: 260px; height: 260px; }
+            .snake-segment { width: 17px; height: 17px; }
+            .food { width: 17px; height: 17px; font-size: 12px; }
+            #controls { bottom: 80px; }
+            .control-btn { width: 50px; height: 50px; font-size: 24px; }
+            .food-legend { font-size: 10px; }
+        }
+    </style>
+</head>
+<body>
+
+    <audio id="radio-audio" preload="none" crossorigin="anonymous">
+        <source src="https://stream.zeno.fm/ndhkmuknva0uv" type="audio/mpeg">
+    </audio>
+
+    <div id="game-container">
+        
+        <div id="emoji-reactions"></div>
+        
+        <div id="score-board">🐍 <span id="score">0</span></div>
+        
+        <div id="game-board"></div>
+        
+        <div id="controls">
+            <button class="control-btn up" onclick="changeDirection('up')">⬆️</button>
+            <button class="control-btn left" onclick="changeDirection('left')">⬅️</button>
+            <button class="control-btn down" onclick="changeDirection('down')">⬇️</button>
+            <button class="control-btn right" onclick="changeDirection('right')">➡️</button>
+        </div>
+        
+        <div id="menu-screen">
+            <div class="menu-title">🐍 SNAKE</div>
+            <div class="menu-subtitle">¡Come caritas y evita el diablo!</div>
+            
+            <div class="food-legend">
+                <div class="legend-item">
+                    <span class="legend-emoji">😀</span>
+                    <span>+10 pts (40%)</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-emoji">😁</span>
+                    <span>+15 pts (20%)</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-emoji">😍</span>
+                    <span>+20 pts (15%)</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-emoji">🤩</span>
+                    <span>+25 pts (10%)</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-emoji">🥳</span>
+                    <span>+30 pts (5%)</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-emoji">😈</span>
+                    <span>-10 pts (5%) ⏰</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-emoji">🤑</span>
+                    <span>+50 pts (3%)</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-emoji">🤪</span>
+                    <span>+40 pts (2%)</span>
+                </div>
+            </div>
+            
+            <button class="menu-btn" onclick="startGame()">▶️ Jugar</button>
+            <button class="menu-btn secondary" onclick="showLeaderboard()">🏆 Ranking</button>
+        </div>
+        
+        <div id="game-over-screen" class="hidden">
+            <div class="menu-title" style="font-size: 36px;">💥 ¡Game Over!</div>
+            <div class="menu-subtitle">Puntuación: <span id="final-score">0</span></div>
+            <button class="menu-btn" onclick="startGame()">🔄 Jugar Otra Vez</button>
+            <button class="menu-btn secondary" onclick="showMenu()">🏠 Menú</button>
+        </div>
+        
+        <div id="results-screen" class="hidden">
+            <div class="results-content">
+                <div style="font-size: 64px; margin-bottom: 10px;">🏆</div>
+                <div style="font-size: 24px; margin-bottom: 10px;">¡Juego Terminado!</div>
+                <div class="results-score"><span id="result-score">0</span> puntos</div>
+                <div class="results-stats">
+                    <div class="stat-item">🐍 Longitud: <span id="result-length">0</span></div>
+                    <div class="stat-item">🍎 Comida: <span id="result-food">0</span></div>
+                </div>
+                <button class="menu-btn" onclick="startGame()">🔄 Jugar Otra Vez</button>
+                <button class="menu-btn secondary" onclick="showLeaderboard()">🏆 Ranking</button>
+                <button class="menu-btn secondary" onclick="shareScore()">📤 Compartir</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="radio-container">
+        <button id="radio-btn" onclick="toggleRadio()">
+            <img src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgqvizWNyyqSmA1V6SOmns4wLWw849mHxRjABDTG0o2iyoHbsDPc9nc0rQW4iW6bfpIQLNn6pOgPlWsygdsuMury7g3ss1yJwDOJY1kHXyQwi53Lp9cyIMduU3NzUVaeme8n6V3_yhhGMEIb5XrCmuBejA6FoE5Uyt9ZmNYAqCxqhFmJf2wA9DpTtz9xg/s640/s80y90.png" class="radio-img">
+            <div class="radio-overlay">🔄</div>
+        </button>
+        <span class="radio-label">80 y 90 Radio</span>
+    </div>
+
+    <button id="sound-btn" onclick="toggleSound()">🔊</button>
+
+    <div id="leaderboard-screen" class="hidden">
+        <div class="leaderboard-content">
+            <div class="leaderboard-title">🏆 Top Serpientes</div>
+            <div id="leaderboard-list"></div>
+            <div id="leaderboard-empty" style="text-align: center; color: white; padding: 20px;">¡No hay récords aún!</div>
+        </div>
+        <button class="menu-btn secondary" onclick="hideLeaderboard()" style="margin-top: 20px;">Cerrar</button>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+
+        const radioAudio = document.getElementById('radio-audio');
+        const radioBtn = document.getElementById('radio-btn');
+        let radioEnabled = false;
+        let radioLoading = false;
+
+        let playerName = '';
+        let score = 0;
+        let gameRunning = false;
+        let gameLoop;
+        let dangerFoodTimer = null;
+        let snake = [];
+        let food = { x: 0, y: 0, type: 'common' };
+        let direction = 'right';
+        let nextDirection = 'right';
+        let speed = 150;
+        let soundEnabled = true;
+        let audioContext = null;
+        let foodEaten = 0;
+
+        const boardSize = 300;
+        const cellSize = 20;
+        const cellCount = boardSize / cellSize;
+
+        const gameBoard = document.getElementById('game-board');
+        const scoreEl = document.getElementById('score');
+        const emojiReactions = document.getElementById('emoji-reactions');
+        const menuScreen = document.getElementById('menu-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const resultsScreen = document.getElementById('results-screen');
+        const finalScoreEl = document.getElementById('final-score');
+        const resultScoreEl = document.getElementById('result-score');
+        const resultLengthEl = document.getElementById('result-length');
+        const resultFoodEl = document.getElementById('result-food');
+        const leaderboardScreen = document.getElementById('leaderboard-screen');
+        const leaderboardList = document.getElementById('leaderboard-list');
+        const leaderboardEmpty = document.getElementById('leaderboard-empty');
+
+        // 🍎 TIPOS DE COMIDA - TODAS CARITAS AMARILLAS
+        const foodTypes = [
+            { type: 'common', points: 10, color: '#ffdd59', class: 'food-common', emoji: '😀', chance: 0.40 },
+            { type: 'uncommon', points: 15, color: '#ffd93d', class: 'food-uncommon', emoji: '😁', chance: 0.20 },
+            { type: 'rare', points: 20, color: '#ffdd59', class: 'food-rare', emoji: '😍', chance: 0.15 },
+            { type: 'epic', points: 25, color: '#ffd93d', class: 'food-epic', emoji: '🤩', chance: 0.10 },
+            { type: 'legendary', points: 30, color: '#ffd93d', class: 'food-legendary', emoji: '🥳', chance: 0.05 },
+            { type: 'danger', points: -10, color: '#a55eea', class: 'food-danger', emoji: '😈', chance: 0.05, temporary: true },
+            { type: 'ultra', points: 50, color: '#ffd93d', class: 'food-ultra', emoji: '🤑', chance: 0.03 },
+            { type: 'crazy', points: 40, color: '#ffd93d', class: 'food-crazy', emoji: '🤪', chance: 0.02 }
+        ];
+
+        const epicReactions = [
+            { emoji: '😀', text: '¡Bravo!' },
+            { emoji: '😃', text: '¡Excelente!' },
+            { emoji: '😄', text: '¡Asombroso!' },
+            { emoji: '😁', text: '¡Espectacular!' },
+            { emoji: '😋', text: '¡Ñam!' },
+            { emoji: '🤤', text: 'Tengo hambre' },
+            { emoji: '😍', text: '¡Mmmm!' },
+            { emoji: '🤩', text: '¡Increíble!' },
+            { emoji: '😎', text: '¡Genial!' },
+            { emoji: '🥳', text: '¡Fiesta!' }
+        ];
+
+        function initPlayerName() {
+            if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+                const user = tg.initDataUnsafe.user;
+                playerName = user.username ? '@' + user.username : (user.first_name || 'Jugador');
+            } else {
+                const saved = localStorage.getItem('snake_player_name');
+                playerName = saved || 'Jugador';
+            }
+        }
+
+        function toggleRadio() {
+            if (radioLoading) return;
+            radioEnabled = !radioEnabled;
+            if (radioEnabled) {
+                radioLoading = true;
+                radioBtn.classList.add('loading');
+                radioAudio.pause();
+                radioAudio.currentTime = 0;
+                radioAudio.play().then(() => {
+                    radioLoading = false;
+                    radioBtn.classList.remove('loading');
+                    radioBtn.classList.add('playing');
+                }).catch(() => {
+                    radioEnabled = false;
+                    radioLoading = false;
+                    radioBtn.classList.remove('loading');
+                });
+            } else {
+                radioAudio.pause();
+                radioBtn.classList.remove('playing', 'loading');
+            }
+        }
+
+        function initAudio() {
+            if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        function playSound(type) {
+            if (!soundEnabled || !audioContext) return;
+            const osc = audioContext.createOscillator(), gain = audioContext.createGain();
+            osc.connect(gain); gain.connect(audioContext.destination);
+            if (type === 'eat') {
+                osc.frequency.value = 600;
+                osc.type = 'sine';
+                gain.gain.setValueAtTime(0.2, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+                osc.start();
+                osc.stop(audioContext.currentTime + 0.1);
+            } else if (type === 'eat-rare') {
+                osc.frequency.value = 700;
+                osc.type = 'sine';
+                gain.gain.setValueAtTime(0.25, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+                osc.start();
+                osc.stop(audioContext.currentTime + 0.15);
+            } else if (type === 'eat-epic') {
+                osc.frequency.value = 800;
+                osc.type = 'sine';
+                gain.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+                osc.start();
+                osc.stop(audioContext.currentTime + 0.2);
+            } else if (type === 'eat-ultra') {
+                osc.frequency.value = 900;
+                osc.type = 'sine';
+                gain.gain.setValueAtTime(0.35, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+                osc.start();
+                osc.stop(audioContext.currentTime + 0.3);
+            } else if (type === 'danger') {
+                osc.frequency.value = 200;
+                osc.type = 'sawtooth';
+                gain.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+                osc.start();
+                osc.stop(audioContext.currentTime + 0.3);
+            } else if (type === 'gameover') {
+                osc.frequency.value = 150;
+                osc.type = 'sawtooth';
+                gain.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                osc.start();
+                osc.stop(audioContext.currentTime + 0.5);
+            }
+        }
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            document.getElementById('sound-btn').innerText = soundEnabled ? '🔊' : '🔇';
+        }
+
+        function changeDirection(newDir) {
+            if (!gameRunning) return;
+            const opposites = { up: 'down', down: 'up', left: 'right', right: 'left' };
+            if (opposites[newDir] !== direction) {
+                nextDirection = newDir;
+            }
+        }
+
+        function showEpicReaction() {
+            const reaction = epicReactions[Math.floor(Math.random() * epicReactions.length)];
+            emojiReactions.innerHTML = '';
+            const emojiEl = document.createElement('div');
+            emojiEl.className = 'reaction-emoji';
+            emojiEl.innerText = reaction.emoji;
+            const textEl = document.createElement('div');
+            textEl.className = 'reaction-text';
+            textEl.innerText = reaction.text;
+            emojiReactions.appendChild(emojiEl);
+            emojiReactions.appendChild(textEl);
+            setTimeout(() => { emojiReactions.innerHTML = ''; }, 2500);
+        }
+
+        function getRandomFoodType() {
+            const rand = Math.random();
+            let cumulative = 0;
+            for (const foodType of foodTypes) {
+                cumulative += foodType.chance;
+                if (rand <= cumulative) {
+                    return foodType;
+                }
+            }
+            return foodTypes[0];
+        }
+
+        // ✅ FUNCIÓN CORREGIDA CON MARGEN SEGURO
+        function spawnFood() {
+            let newX, newY;
+            
+            // ✅ MARGEN SEGURO: Deja 1 celda de borde en cada lado
+            const margin = 1;
+            const minX = margin;
+            const minY = margin;
+            const maxX = cellCount - margin - 1;
+            const maxY = cellCount - margin - 1;
+            
+            do {
+                newX = Math.floor(Math.random() * (maxX - minX + 1)) + minX;
+                newY = Math.floor(Math.random() * (maxY - minY + 1)) + minY;
+            } while (snake.some(segment => segment.x === newX && segment.y === newY));
+            
+            const foodType = getRandomFoodType();
+            food = { 
+                x: newX, 
+                y: newY, 
+                type: foodType.type, 
+                points: foodType.points, 
+                emoji: foodType.emoji,
+                temporary: foodType.temporary || false
+            };
+            renderFood();
+            
+            if (dangerFoodTimer) clearTimeout(dangerFoodTimer);
+            if (food.temporary) {
+                dangerFoodTimer = setTimeout(() => {
+                    if (gameRunning && food.type === 'danger') {
+                        spawnFood();
+                    }
+                }, 5000);
+            }
+        }
+
+        function renderFood() {
+            const existingFood = document.querySelector('.food');
+            if (existingFood) existingFood.remove();
+            
+            const foodType = foodTypes.find(f => f.type === food.type) || foodTypes[0];
+            const foodEl = document.createElement('div');
+            foodEl.className = `food ${foodType.class}`;
+            foodEl.style.left = (food.x * cellSize) + 'px';
+            foodEl.style.top = (food.y * cellSize) + 'px';
+            foodEl.style.fontSize = '16px';
+            foodEl.innerHTML = food.emoji;
+            
+            if (food.temporary) {
+                const timerEl = document.createElement('div');
+                timerEl.className = 'food-timer';
+                const timerBar = document.createElement('div');
+                timerBar.className = 'food-timer-bar';
+                timerEl.appendChild(timerBar);
+                foodEl.appendChild(timerEl);
+            }
+            
+            gameBoard.appendChild(foodEl);
+        }
+
+        function renderSnake() {
+            document.querySelectorAll('.snake-segment').forEach(el => el.remove());
+            snake.forEach((segment, index) => {
+                const segmentEl = document.createElement('div');
+                segmentEl.className = 'snake-segment' + (index === 0 ? ' snake-head' : '');
+                segmentEl.style.left = (segment.x * cellSize) + 'px';
+                segmentEl.style.top = (segment.y * cellSize) + 'px';
+                gameBoard.appendChild(segmentEl);
+            });
+        }
+
+        function createParticles(x, y, color) {
+            for (let i = 0; i < 20; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                const size = Math.random() * 6 + 4;
+                particle.style.width = size + 'px';
+                particle.style.height = size + 'px';
+                particle.style.background = color;
+                particle.style.left = x + 'px';
+                particle.style.top = y + 'px';
+                const angle = (Math.random() * 360) * (Math.PI / 180);
+                const distance = Math.random() * 60 + 30;
+                particle.style.setProperty('--tx', Math.cos(angle) * distance + 'px');
+                particle.style.setProperty('--ty', Math.sin(angle) * distance + 'px');
+                particle.style.animationDuration = (Math.random() * 0.3 + 0.3) + 's';
+                gameBoard.appendChild(particle);
+                setTimeout(() => particle.remove(), 600);
+            }
+        }
+
+        function showFloatingText(x, y, text, color) {
+            const textEl = document.createElement('div');
+            textEl.className = 'floating-text';
+            textEl.innerText = text;
+            textEl.style.color = color;
+            textEl.style.left = x + 'px';
+            textEl.style.top = y + 'px';
+            gameBoard.appendChild(textEl);
+            setTimeout(() => textEl.remove(), 800);
+        }
+
+        function startGame() {
+            initAudio();
+            menuScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            resultsScreen.classList.add('hidden');
+            
+            snake = [{ x: 5, y: 10 }, { x: 4, y: 10 }, { x: 3, y: 10 }];
+            direction = 'right';
+            nextDirection = 'right';
+            score = 0;
+            speed = 150;
+            foodEaten = 0;
+            gameRunning = true;
+            
+            scoreEl.innerText = score;
+            emojiReactions.innerHTML = '';
+            spawnFood();
+            renderSnake();
+            
+            clearInterval(gameLoop);
+            if (dangerFoodTimer) clearTimeout(dangerFoodTimer);
+            gameLoop = setInterval(update, speed);
+        }
+
+        function update() {
+            if (!gameRunning) return;
+            
+            direction = nextDirection;
+            const head = { ...snake[0] };
+            
+            switch(direction) {
+                case 'up': head.y--; break;
+                case 'down': head.y++; break;
+                case 'left': head.x--; break;
+                case 'right': head.x++; break;
+            }
+            
+            if (head.x < 0 || head.x >= cellCount || head.y < 0 || head.y >= cellCount) {
+                gameOver();
+                return;
+            }
+            
+            if (snake.some(segment => segment.x === head.x && segment.y === head.y)) {
+                gameOver();
+                return;
+            }
+            
+            snake.unshift(head);
+            
+            if (head.x === food.x && head.y === food.y) {
+                foodEaten++;
+                
+                if (food.points > 0) {
+                    score += food.points;
+                    
+                    if (food.points >= 50) playSound('eat-ultra');
+                    else if (food.points >= 30) playSound('eat-epic');
+                    else if (food.points >= 20) playSound('eat-rare');
+                    else playSound('eat');
+                    
+                    showEpicReaction();
+                    
+                    const foodType = foodTypes.find(f => f.type === food.type);
+                    const foodRect = document.querySelector('.food')?.getBoundingClientRect();
+                    if (foodRect) {
+                        createParticles(
+                            foodRect.left - gameBoard.getBoundingClientRect().left + 10,
+                            foodRect.top - gameBoard.getBoundingClientRect().top + 10,
+                            foodType.color
+                        );
+                        showFloatingText(
+                            foodRect.left - gameBoard.getBoundingClientRect().left,
+                            foodRect.top - gameBoard.getBoundingClientRect().top,
+                            `+${food.points}!`,
+                            foodType.color
+                        );
+                    }
+                    
+                    if (score % 50 === 0 && speed > 50) {
+                        speed -= 10;
+                        clearInterval(gameLoop);
+                        gameLoop = setInterval(update, speed);
+                    }
+                } else {
+                    score = Math.max(0, score + food.points);
+                    playSound('danger');
+                    showFloatingText(head.x * cellSize, head.y * cellSize, `${food.points}`, '#a55eea');
+                    if (tg && tg.HapticFeedback) {
+                        tg.HapticFeedback.impactOccurred('medium');
+                    }
+                }
+                
+                scoreEl.innerText = score;
+                spawnFood();
+            } else {
+                snake.pop();
+            }
+            
+            renderSnake();
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            clearInterval(gameLoop);
+            if (dangerFoodTimer) clearTimeout(dangerFoodTimer);
+            playSound('gameover');
+            
+            const head = snake[0];
+            const headX = head.x * cellSize + 10;
+            const headY = head.y * cellSize + 10;
+            createParticles(headX, headY, '#ff6b6b');
+            
+            if (tg && tg.HapticFeedback) {
+                tg.HapticFeedback.notificationOccurred('error');
+            }
+            
+            setTimeout(() => {
+                finalScoreEl.innerText = score;
+                resultScoreEl.innerText = score;
+                resultLengthEl.innerText = snake.length;
+                resultFoodEl.innerText = foodEaten;
+                gameOverScreen.classList.remove('hidden');
+                saveScore(score);
+            }, 500);
+        }
+
+        function saveScore(score) {
+            const scores = getScores();
+            scores.push({ name: playerName, score: score, date: new Date().toISOString() });
+            scores.sort((a, b) => b.score - a.score);
+            scores.splice(50);
+            localStorage.setItem('snake_scores', JSON.stringify(scores));
+        }
+
+        function getScores() {
+            const scores = localStorage.getItem('snake_scores');
+            return scores ? JSON.parse(scores) : [];
+        }
+
+        function showLeaderboard() {
+            const scores = getScores();
+            leaderboardList.innerHTML = '';
+            if (scores.length === 0) {
+                leaderboardEmpty.style.display = 'block';
+            } else {
+                leaderboardEmpty.style.display = 'none';
+                scores.forEach((entry, index) => {
+                    const li = document.createElement('div');
+                    li.className = 'leaderboard-item';
+                    if (index === 0) li.classList.add('top-1');
+                    else if (index === 1) li.classList.add('top-2');
+                    else if (index === 2) li.classList.add('top-3');
+                    const emoji = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '';
+                    li.innerHTML = `<span>${emoji} #${index + 1} ${entry.name}</span><span style="color: #ffdd59;">${entry.score} pts</span>`;
+                    leaderboardList.appendChild(li);
+                });
+            }
+            leaderboardScreen.classList.remove('hidden');
+        }
+
+        function hideLeaderboard() {
+            leaderboardScreen.classList.add('hidden');
+        }
+
+        function showMenu() {
+            gameOverScreen.classList.add('hidden');
+            resultsScreen.classList.add('hidden');
+            menuScreen.classList.remove('hidden');
+        }
+
+        function shareScore() {
+            const message = `🐍 ¡Jugué Snake con Caritas!\n\n🏆 Mi puntuación: ${score} puntos\n🍎 Comida: ${foodEaten}\n\n👉 ¡Supérame!`;
+            navigator.clipboard.writeText(message).then(() => {
+                if (tg && tg.showAlert) tg.showAlert('📋 ¡Copiado! Pega en Telegram');
+                else alert('📋 ¡Copiado! Pega en Telegram');
+            });
+        }
+
+        initPlayerName();
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowUp') changeDirection('up');
+            else if (e.key === 'ArrowDown') changeDirection('down');
+            else if (e.key === 'ArrowLeft') changeDirection('left');
+            else if (e.key === 'ArrowRight') changeDirection('right');
+        });
+
+        let touchStartX = 0;
+        let touchStartY = 0;
+        gameBoard.addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+        }, { passive: true });
+        gameBoard.addEventListener('touchend', (e) => {
+            if (!gameRunning) return;
+            const touchEndX = e.changedTouches[0].clientX;
+            const touchEndY = e.changedTouches[0].clientY;
+            const diffX = touchEndX - touchStartX;
+            const diffY = touchEndY - touchStartY;
+            if (Math.abs(diffX) > Math.abs(diffY)) {
+                if (diffX > 0) changeDirection('right');
+                else changeDirection('left');
+            } else {
+                if (diffY > 0) changeDirection('down');
+                else changeDirection('up');
+            }
+        }, { passive: true });
+    </script>
+</body>
+</html>
