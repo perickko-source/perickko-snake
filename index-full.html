@@ -29,6 +29,7 @@
     .hud-value { font-size:18px; font-weight:700; color:#4ade80; }
     .hud-value.best { color:#fbbf24; }
     .hud-value.lvl { color:#a78bfa; }
+    .hud-value.gift { color:#f472b6; font-size:14px; }
 
     #radioContainer {
         display:flex; align-items:center; gap:6px;
@@ -195,6 +196,7 @@
     <div class="hud-item"><span class="hud-label">Longitud</span><span class="hud-value" id="hudLength">3</span></div>
     <div class="hud-item"><span class="hud-label">Récord</span><span class="hud-value best" id="hudBest">0</span></div>
     <div class="hud-item"><span class="hud-label">Nivel</span><span class="hud-value lvl" id="hudLevel">1</span></div>
+    <div class="hud-item" id="giftHud" style="display:none;"><span class="hud-label">🎁 Regalo</span><span class="hud-value gift" id="giftTime">15s</span></div>
     
     <div id="radioContainer">
         <span class="hud-label" style="margin:0;">Radio</span>
@@ -268,7 +270,8 @@
     <div id="menuHelp" class="overlay hidden">
         <h2>Come y crece</h2>
         <p>Siempre hay varias caritas en pantalla. ¡Come rápido para hacer combos!</p>
-        <p style="color:#fbbf24;">⚠️ Los emojis especiales (🤯👑💎🌟🏆🔮) desaparecen si no los alcanzas a tiempo.</p>
+        <p style="color:#fbbf24;">⚠️ Los emojis especiales desaparecen si no los alcanzas a tiempo.</p>
+        <p style="color:#f472b6;">🎁 El Regalo Sorpresa cambia tu serpiente a un skin único temporal.</p>
         <div class="legend" id="legend"></div>
         <p>Los bordes son seguros: ¡atraviesas!</p>
         <button class="menu-btn primary" id="btnHelpBack" style="margin-top:16px;">← Volver</button>
@@ -384,7 +387,13 @@ const SPECIALS = [
     {emoji:'\uD83D\uDC8E', pts:200, p:.005, color:'#67e8f9', sound:'money', lvl:15, name:'Diamante',   announcement:'¡DIAMANTE!'},
     {emoji:'\uD83C\uDF1F', pts:250, p:.004, color:'#fde047', sound:'money', lvl:20, name:'Estrella',   announcement:'¡ESTRELLA FUGAZ!'},
     {emoji:'\uD83C\uDFC6', pts:300, p:.003, color:'#fbbf24', sound:'money', lvl:24, name:'Trofeo',     announcement:'¡TROFEO!'},
-    {emoji:'\uD83D\uDD2E', pts:400, p:.002, color:'#c084fc', sound:'money', lvl:25, name:'Bola Mágica',announcement:'¡BOLA MÁGICA!'}
+    {emoji:'\uD83D\uDD2E', pts:400, p:.002, color:'#c084fc', sound:'money', lvl:25, name:'Bola Mágica',announcement:'¡BOLA MÁGICA!'},
+    {emoji:'\uD83E\uDD84', pts:500, p:.0015, color:'#f0abfc', sound:'money', lvl:26, name:'Unicornio',  announcement:'¡UNICORNIO!'},
+    {emoji:'\uD83C\uDF40', pts:350, p:.002, color:'#4ade80', sound:'money', lvl:28, name:'Trébol',     announcement:'¡TRÉBOL DE LA SUERTE!'},
+    {emoji:'\uD83C\uDF81', pts:450, p:.0015, color:'#f87171', sound:'money', lvl:30, name:'Regalo',     announcement:'¡REGALO SORPRESA!'},
+    {emoji:'\uD83D\uDC7E', pts:600, p:.001, color:'#a78bfa', sound:'money', lvl:32, name:'Alien',      announcement:'¡INVASIÓN ALIEN!'},
+    {emoji:'\uD83D\uDC09', pts:700, p:.0008, color:'#ef4444', sound:'money', lvl:34, name:'Dragón',     announcement:'¡DRAGÓN!'},
+    {emoji:'\uD83E\uDD85', pts:800, p:.0006, color:'#fbbf24', sound:'money', lvl:36, name:'Águila',     announcement:'¡ÁGUILA!'}
 ];
 
 let profile = JSON.parse(localStorage.getItem('snake_profile')||'null') || {
@@ -403,17 +412,22 @@ function addXP(amount){
     saveProfile();
     return gained;
 }
-function currentSkin(){ return SKINS.find(s=>s.id===profile.skin) || SKINS[0]; }
 function currentBg(){ return BGS.find(b=>b.id===profile.bg) || BGS[0]; }
 function getUnlockedFoods(){
     return foods.concat(SPECIALS.filter(s=>profile.level>=s.lvl));
 }
 
 function getInitialFoods() { 
+    if (profile.level >= 35) return 5;
+    if (profile.level >= 30) return 4;
     if (profile.level >= 23) return 3;
     return profile.level >= 17 ? 3 : 2; 
 }
-function getMaxFoods() { return profile.level >= 17 ? 5 : 4; }
+function getMaxFoods() { 
+    if (profile.level >= 35) return 8;
+    if (profile.level >= 30) return 7;
+    return profile.level >= 17 ? 5 : 4; 
+}
 
 let audio;
 function ensureAudio(){
@@ -452,6 +466,10 @@ function specialSpawnSound(){
 
 function specialEatSound(){
     [523,659,784,1046,1320].forEach((f,i)=>setTimeout(()=>playTone(f,'sine',.12,.15),i*60));
+}
+
+function giftSound(){
+    [523,659,784,988,1046,1318].forEach((f,i)=>setTimeout(()=>playTone(f,'sine',.15,.15),i*50));
 }
 
 function levelUpSound(){
@@ -500,6 +518,7 @@ const comboMessages = [
 const COMBO_WINDOW=2000;
 const SPECIAL_LIFETIME = 7000;
 const NORMAL_FOOD_LIFETIME = 8000;
+const GIFT_SKIN_DURATION = 15000; // 15 segundos
 
 let snake=[],dir={x:1,y:0},nextDir={x:1,y:0},prevSnake=[],interpAlpha=0;
 let boardFoods=[],score=0,eaten=0,playing=false,maxCombo=0;
@@ -509,11 +528,53 @@ let acc=0, lastTime=0;
 let best=parseInt(localStorage.getItem('snake_best')||'0');
 let particles=[],floatingTexts=[],lastEatTime=0,comboCount=0;
 
+// ✅ Estado del skin regalo
+let giftSkinActive = false;
+let giftSkinEndTime = 0;
+let giftSkin = null;
+
 let jungleLeaves = [];
 let jungleFireflies = [];
 let volcanoBubbles = [];
 let volcanoCracks = [];
 let volcanoAsh = [];
+
+// ✅ Paletas de colores para el skin regalo (cada vez será diferente)
+const GIFT_PALETTES = [
+    {head:['#ff6b6b','#ee5a24'], from:[255,107,107], to:[238,90,36], glow:'#ff6b6b'},
+    {head:['#48dbfb','#0abde3'], from:[72,219,251], to:[10,189,227], glow:'#48dbfb'},
+    {head:['#ff9ff3','#f368e0'], from:[255,159,243], to:[243,104,224], glow:'#ff9ff3'},
+    {head:['#feca57','#ff9f43'], from:[254,202,87], to:[255,159,67], glow:'#feca57'},
+    {head:['#55efc4','#00b894'], from:[85,239,196], to:[0,184,148], glow:'#55efc4'},
+    {head:['#a29bfe','#6c5ce7'], from:[162,155,254], to:[108,92,231], glow:'#a29bfe'},
+    {head:['#fd79a8','#e84393'], from:[253,121,168], to:[232,67,147], glow:'#fd79a8'},
+    {head:['#00cec9','#0984e3'], from:[0,206,201], to:[9,132,227], glow:'#00cec9'},
+    {head:['#fdcb6e','#e17055'], from:[253,203,110], to:[225,112,85], glow:'#fdcb6e'},
+    {head:['#74b9ff','#0984e3'], from:[116,185,255], to:[9,132,227], glow:'#74b9ff'},
+    {head:['#ff7675','#d63031'], from:[255,118,117], to:[214,48,49], glow:'#ff7675'},
+    {head:['#a8e6cf','#55efc4'], from:[168,230,207], to:[85,239,196], glow:'#a8e6cf'}
+];
+
+function generateRandomGiftSkin() {
+    const palette = GIFT_PALETTES[Math.floor(Math.random() * GIFT_PALETTES.length)];
+    return {
+        id: 'gift',
+        name: '🎁 Regalo',
+        head: palette.head,
+        from: palette.from,
+        to: palette.to,
+        glow: palette.glow,
+        rainbow: true,
+        sw: `linear-gradient(135deg, ${palette.head[0]}, ${palette.head[1]})`
+    };
+}
+
+function currentSkin() {
+    if (giftSkinActive && giftSkin && performance.now() < giftSkinEndTime) {
+        return giftSkin;
+    }
+    return SKINS.find(s=>s.id===profile.skin) || SKINS[0];
+}
 
 function drawCoverImage(img, x, y, w, h) {
     if (!img.complete || img.naturalWidth === 0) return;
@@ -671,33 +732,93 @@ function drawFloatingTexts(){
     }
 }
 
-function spawnFood(){
-    const pool=getUnlockedFoods();
-    const total=pool.reduce((a,f)=>a+f.p,0);
-    const r=Math.random()*total; let cum=0,type=pool[0];
-    for(const t of pool){cum+=t.p; if(r<=cum){type=t;break;}}
-    let f, ok=false, tries=0;
-    while(!ok && tries++<500){
-        f={x:Math.floor(Math.random()*cols), y:Math.floor(Math.random()*rows), ...type, spawnTime:performance.now()};
+function spawnFoodLine() {
+    const pool = getUnlockedFoods();
+    const total = pool.reduce((a,f)=>a+f.p,0);
+    const horizontal = Math.random() > 0.5;
+    const length = 4 + Math.floor(Math.random() * 2);
+    
+    let startX, startY, dx, dy;
+    if (horizontal) {
+        startX = Math.floor(Math.random() * (cols - length));
+        startY = Math.floor(Math.random() * rows);
+        dx = 1; dy = 0;
+    } else {
+        startX = Math.floor(Math.random() * cols);
+        startY = Math.floor(Math.random() * (rows - length));
+        dx = 0; dy = 1;
+    }
+    
+    for (let i = 0; i < length; i++) {
+        const x = startX + dx * i;
+        const y = startY + dy * i;
+        if (snake.some(s => s.x === x && s.y === y)) return false;
+    }
+    
+    for (let i = 0; i < length; i++) {
+        const x = startX + dx * i;
+        const y = startY + dy * i;
+        const r = Math.random() * total;
+        let cum = 0, type = pool[0];
+        for (const t of pool) { cum += t.p; if (r <= cum) { type = t; break; } }
+        
+        const f = {
+            x, y, ...type,
+            spawnTime: performance.now(),
+            isLine: true,
+            lineIndex: i
+        };
+        
+        if (profile.level >= 23) {
+            f.expiresAt = performance.now() + NORMAL_FOOD_LIFETIME;
+        }
+        
+        boardFoods.push(f);
+    }
+    
+    return true;
+}
+
+function spawnFood() {
+    const pool = getUnlockedFoods();
+    const total = pool.reduce((a,f)=>a+f.p,0);
+    const r = Math.random() * total;
+    let cum = 0, type = pool[0];
+    for (const t of pool) { cum += t.p; if (r <= cum) { type = t; break; } }
+    
+    let f, ok = false, tries = 0;
+    while (!ok && tries++ < 500) {
+        f = { x: Math.floor(Math.random()*cols), y: Math.floor(Math.random()*rows), ...type, spawnTime: performance.now() };
         ok = !snake.some(s=>s.x===f.x&&s.y===f.y) && !boardFoods.some(b=>b.x===f.x&&b.y===f.y);
     }
-    if(ok){
+    
+    if (ok) {
         const isSpecial = SPECIALS.some(s=>s.emoji===f.emoji);
-        if(isSpecial) {
+        if (isSpecial) {
             f.expiresAt = performance.now() + SPECIAL_LIFETIME;
-        } else if(profile.level >= 23) {
+        } else if (profile.level >= 23) {
             f.expiresAt = performance.now() + NORMAL_FOOD_LIFETIME;
         }
         boardFoods.push(f);
-        if(isSpecial){
-            const cx=offX+f.x*cell+cell/2, cy=offY+f.y*cell+cell/2;
+        if (isSpecial) {
+            const cx = offX + f.x*cell + cell/2, cy = offY + f.y*cell + cell/2;
             specialSpawnSound();
-            spawnOrbitParticles(cx,cy,f.color,10);
+            spawnOrbitParticles(cx, cy, f.color, 10);
             const spec = SPECIALS.find(s=>s.emoji===f.emoji);
             showAnnouncement(spec.announcement, f.color, 2500);
-            spawnFloatingText(cx,cy-30,'¡ESPECIAL!','#fbbf24',22);
+            spawnFloatingText(cx, cy-30, '¡ESPECIAL!', '#fbbf24', 22);
         }
     }
+}
+
+function activateGiftSkin() {
+    giftSkin = generateRandomGiftSkin();
+    giftSkinActive = true;
+    giftSkinEndTime = performance.now() + GIFT_SKIN_DURATION;
+    document.getElementById('giftHud').style.display = 'flex';
+    giftSound();
+    showAnnouncement('¡SKIN REGALO!', giftSkin.glow, 2000);
+    spawnFloatingText(W/2, H/2, '🎁 ' + giftSkin.name, giftSkin.glow, 28);
 }
 
 function startGame(){
@@ -711,6 +832,10 @@ function startGame(){
     score=0; eaten=0; acc=0; interpAlpha=0; maxCombo=0; playing=true;
     boardFoods=[]; particles=[]; floatingTexts=[]; lastEatTime=0; comboCount=0;
     screenShake=0; announcementText=null;
+    giftSkinActive = false;
+    giftSkinEndTime = 0;
+    giftSkin = null;
+    document.getElementById('giftHud').style.display = 'none';
     speed = selectedSpeed;
     for(let i=0; i<getInitialFoods(); i++) spawnFood();
     hideAll(); updateHUD();
@@ -733,10 +858,15 @@ function step(){
     if(snake.some(s=>s.x===head.x&&s.y===head.y)) return endGame();
     prevSnake=snake.map(s=>({...s}));
     snake.unshift(head);
+    
     let eatenIndex = -1;
     for(let i=0; i<boardFoods.length; i++){
-        if(head.x===boardFoods[i].x && head.y===boardFoods[i].y){ eatenIndex = i; break; }
+        const f = boardFoods[i];
+        const fx = Math.round(f.x);
+        const fy = Math.round(f.y);
+        if(head.x===fx && head.y===fy){ eatenIndex = i; break; }
     }
+    
     if(eatenIndex !== -1){
         const food = boardFoods[eatenIndex];
         boardFoods.splice(eatenIndex, 1);
@@ -747,8 +877,16 @@ function step(){
         if(mult>maxCombo) maxCombo=mult;
         score+=food.pts*mult; eaten++;
         const px=offX+food.x*cell+cell/2, py=offY+food.y*cell+cell/2;
+        
         const isSpecial = SPECIALS.some(s=>s.emoji===food.emoji);
-        if(isSpecial){
+        
+        // ✅ Efecto especial del Regalo Sorpresa
+        if (food.emoji === '\uD83C\uDF81') {
+            activateGiftSkin();
+            spawnParticles(px, py, food.color, 60);
+            spawnFloatingText(px, py-30, '¡REGALO!', '#f472b6', 28);
+            setTimeout(()=>spawnFloatingText(px, py-55, '+'+food.pts*mult+' PTS', '#fbbf24', 20), 200);
+        } else if(isSpecial){
             specialEatSound();
             screenShake = 10;
             spawnParticles(px,py,food.color,50);
@@ -763,13 +901,29 @@ function step(){
                 spawnFloatingText(px,py-20,msg,'#4ade80',18);
             }
         }
-        if(boardFoods.length < getMaxFoods()) spawnFood();
+        
+        if(boardFoods.length < getMaxFoods()) {
+            if (Math.random() < 0.15 && profile.level >= 30) {
+                spawnFoodLine();
+            } else {
+                spawnFood();
+            }
+        }
         if(score>best){best=score;localStorage.setItem('snake_best',best);}
     } else {
         snake.pop();
     }
     
     const now = performance.now();
+    
+    // ✅ Comprobar si el skin regalo ha expirado
+    if (giftSkinActive && now >= giftSkinEndTime) {
+        giftSkinActive = false;
+        giftSkin = null;
+        document.getElementById('giftHud').style.display = 'none';
+        spawnFloatingText(W/2, H/2, 'Skin normal restaurado', '#94a3b8', 22);
+    }
+    
     for(let i=boardFoods.length-1; i>=0; i--){
         if(boardFoods[i].expiresAt && now > boardFoods[i].expiresAt){
             const expired = boardFoods[i];
@@ -783,9 +937,28 @@ function step(){
             }
             
             boardFoods.splice(i,1);
-            if(boardFoods.length < getMaxFoods()) spawnFood();
+            if(boardFoods.length < getMaxFoods()) {
+                if (Math.random() < 0.15 && profile.level >= 30) {
+                    spawnFoodLine();
+                } else {
+                    spawnFood();
+                }
+            }
         }
     }
+    
+    // ✅ Actualizar HUD del regalo
+    if (giftSkinActive) {
+        const timeLeft = Math.max(0, giftSkinEndTime - now);
+        document.getElementById('giftTime').textContent = Math.ceil(timeLeft / 1000) + 's';
+        // Efecto parpadeo cuando queda poco tiempo
+        if (timeLeft < 3000) {
+            document.getElementById('giftTime').style.opacity = Math.floor(now/300)%2 === 0 ? '1' : '0.4';
+        } else {
+            document.getElementById('giftTime').style.opacity = '1';
+        }
+    }
+    
     updateHUD();
 }
 
